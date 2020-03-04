@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
@@ -30,16 +31,18 @@ func main() {
 	args := os.Args[2:]
 	w.Add(app)
 
-	m("Watching %s running with arguments '%s'", app, strings.Join(args, " "))
-	cmd, err := runServer(app, args)
-	if err != nil {
-		e("Couldn't start process '%s': %s", app, err.Error())
-		os.Exit(2)
-	}
-
 	ctrlc := daemon.BreakChannel()
 	quit := make(chan bool)
 	go func() {
+		var err error
+		var cmd *exec.Cmd
+
+		m("Watching %s running with arguments '%s'", app, strings.Join(args, " "))
+		cmd, err = runServer(app, args)
+		if err != nil {
+			e("Couldn't start process '%s': %s", app, err.Error())
+			os.Exit(2)
+		}
 		for {
 			select {
 			case ev := <-w.Events:
@@ -56,6 +59,7 @@ func main() {
 						e("Couldn't start process '%s': %s", app, err.Error())
 					}
 				}
+
 			case err := <-w.Errors:
 				e("Watcher error: %s", err.Error())
 			case <-ctrlc:
@@ -79,6 +83,8 @@ func runServer(app string, args []string) (*exec.Cmd, error) {
 	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	path, _ := filepath.Abs(app)
+	cmd.Dir = filepath.Dir(path)
 	err := cmd.Start()
 	return cmd, err
 }
