@@ -6,10 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/fsnotify/fsnotify"
-
 	"github.com/Urethramancer/daemon"
 	"github.com/Urethramancer/signor/log"
+	"github.com/fsnotify/fsnotify"
 )
 
 func main() {
