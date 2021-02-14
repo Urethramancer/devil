@@ -3,20 +3,34 @@ package main
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/Urethramancer/daemon"
 	"github.com/Urethramancer/signor/log"
+	"github.com/Urethramancer/signor/opt"
 	"github.com/fsnotify/fsnotify"
 )
+
+var o struct {
+	opt.DefaultHelp
+	Envfile string   `short:"e" long:"envfile" placeholder:"FILE" help:"File containing environment variable key-value pairs."`
+	App     string   `placeholder:"PROGRAM" help:"Program to run and keep running."`
+	Args    []string `placeholder:"ARGS" help:"Program arguments."`
+}
 
 func main() {
 	m := log.Default.TMsg
 	e := log.Default.TErr
-	if len(os.Args) < 2 {
-		m("Not enough arguments. Usage:\n%s <executable> [args...]", os.Args[0])
-		os.Exit(1)
+
+	a := opt.Parse(&o)
+	if o.Help {
+		a.Usage()
+		return
+	}
+
+	env, err := LoadEnv(o.Envfile)
+	if err != nil {
+		os.Exit(2)
 	}
 
 	w, err := fsnotify.NewWatcher()
@@ -26,9 +40,7 @@ func main() {
 	}
 
 	defer w.Close()
-	app := os.Args[1]
-	args := os.Args[2:]
-	w.Add(app)
+	w.Add(o.App)
 
 	ctrlc := daemon.BreakChannel()
 	quit := make(chan bool)
@@ -36,10 +48,10 @@ func main() {
 		var err error
 		var cmd *exec.Cmd
 
-		m("Watching %s running with arguments '%s'", app, strings.Join(args, " "))
-		cmd, err = runServer(app, args)
+		m("Watching %s running with arguments '%s'", o.App, strings.Join(o.Args, " "))
+		cmd, err = runServer(o.App, o.Args, env)
 		if err != nil {
-			e("Couldn't start process '%s': %s", app, err.Error())
+			e("Couldn't start process '%s': %s", o.App, err.Error())
 			os.Exit(2)
 		}
 		for {
@@ -53,9 +65,9 @@ func main() {
 						e("Error shutting down: %s", err.Error())
 					}
 
-					cmd, err = runServer(app, args)
+					cmd, err = runServer(o.App, o.Args, env)
 					if err != nil {
-						e("Couldn't start process '%s': %s", app, err.Error())
+						e("Couldn't start process '%s': %s", o.App, err.Error())
 					}
 				}
 
@@ -71,19 +83,4 @@ func main() {
 	}()
 
 	<-quit
-}
-
-func runServer(app string, args []string) (*exec.Cmd, error) {
-	cmd := &exec.Cmd{}
-	if len(args) > 0 {
-		cmd = exec.Command(app, args...)
-	} else {
-		cmd = exec.Command(app)
-	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	path, _ := filepath.Abs(app)
-	cmd.Dir = filepath.Dir(path)
-	err := cmd.Start()
-	return cmd, err
 }
