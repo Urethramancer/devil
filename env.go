@@ -20,7 +20,7 @@ func LoadEnv(fn string) ([]string, error) {
 			continue
 		}
 
-		a := strings.Split(x, "=")
+		a := strings.SplitN(x, "=", 2)
 		k := strings.TrimSpace(a[0])
 		v := strings.TrimSpace(a[1])
 		e := fmt.Sprintf("%s=%s", k, v)
