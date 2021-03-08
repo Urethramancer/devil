@@ -28,9 +28,13 @@ func main() {
 		return
 	}
 
-	env, err := LoadEnv(o.Envfile)
-	if err != nil {
-		os.Exit(2)
+	var env []string
+	var err error
+	if o.Envfile != "" {
+		env, err = LoadEnv(o.Envfile)
+		if err != nil {
+			os.Exit(2)
+		}
 	}
 
 	w, err := fsnotify.NewWatcher()
