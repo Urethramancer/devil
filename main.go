@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/Urethramancer/daemon"
-	"github.com/Urethramancer/signor/log"
-	"github.com/Urethramancer/signor/opt"
 	"github.com/fsnotify/fsnotify"
+	ll "github.com/grimdork/loglines"
+	"github.com/grimdork/opt"
 )
 
 var o struct {
@@ -19,15 +19,14 @@ var o struct {
 }
 
 func main() {
-	m := log.Default.TMsg
-	e := log.Default.TErr
-
 	a := opt.Parse(&o)
 	if o.Help {
 		a.Usage()
 		return
 	}
 
+	m := ll.Msg
+	e := ll.Err
 	var env []string
 	var err error
 	if o.Envfile != "" {

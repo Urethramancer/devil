@@ -1,8 +1,12 @@
 github.com/Urethramancer/daemon v0.3.0 h1:tVsnp/sWuYgzL0BE5TRYKHxrHplstHUmbBLorpKk00M=
 github.com/Urethramancer/daemon v0.3.0/go.mod h1:/T1hacQ495iR95N1l6qtceUY2i6gtcEwcemi6WGJ0n8=
-github.com/Urethramancer/signor v0.10.2 h1:Re02wGIJMtrpAUS9t9TvMkjx++ST2LtNHBI7+0w6Xvs=
-github.com/Urethramancer/signor v0.10.2/go.mod h1:DORKrGOeJ735IqsyRFgGKpE5miMDmMhkK/iQAoaVF4g=
 github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWoS4=
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
+github.com/grimdork/loglines v1.0.1 h1:QgcQcHmNwT4eQ4akS3XI/JHAyP6s6StREC8tcU6m+fM=
+github.com/grimdork/loglines v1.0.1/go.mod h1:1x8hNXpwr74Gq2rlqH0Sd82YTgGAx2PynkJ37j9DaGY=
+github.com/grimdork/opt v0.1.1 h1:wgJ1m4qwMjy8g5prjWLIj6BS67FvRm5p9581WIKIoMs=
+github.com/grimdork/opt v0.1.1/go.mod h1:tTozevD8t7xSwtFBsUeg5lu2BlU1jtCt7cbUPikHAxA=
+github.com/grimdork/str v1.0.1 h1:1LJRk0SHB65LgiUFGHm9eq/WNpZYbNXJ733peg9/K2A=
+github.com/grimdork/str v1.0.1/go.mod h1:MoFNACllXqLUTqGL6gWvB3dyyyyt5Jn5IFMEPfIgLgs=
 golang.org/x/sys v0.0.0-20191005200804-aed5e4c7ecf9 h1:L2auWcuQIvxz9xSEqzESnV/QN/gNRXNApHi3fYwl2w0=
 golang.org/x/sys v0.0.0-20191005200804-aed5e4c7ecf9/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
