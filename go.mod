@@ -4,12 +4,12 @@ go 1.17
 
 require (
 	github.com/Urethramancer/daemon v0.3.0
-	github.com/fsnotify/fsnotify v1.4.9
+	github.com/fsnotify/fsnotify v1.6.0
+	github.com/grimdork/climate v0.8.7
 	github.com/grimdork/loglines v1.0.1
-	github.com/grimdork/opt v0.1.1
 )
 
 require (
-	github.com/grimdork/str v1.0.1 // indirect
-	golang.org/x/sys v0.0.0-20191005200804-aed5e4c7ecf9 // indirect
+	github.com/grimdork/str v1.0.2 // indirect
+	golang.org/x/sys v0.3.0 // indirect
 )
