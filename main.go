@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/Urethramancer/daemon"
 	"github.com/fsnotify/fsnotify"
@@ -20,26 +20,21 @@ func main() {
 	opt.SetPositional("ARGS", "Program arguments.", "", false, arg.VarStringSlice)
 	m := ll.Msg
 	e := ll.Err
-	var env []string
-	var err error
-	fmt.Printf("Args: %#v\n", os.Args[1:])
+
 	args := os.Args[1:]
-	fmt.Printf("Args: %#v\n", args)
-	err = opt.Parse(args)
+	err := opt.Parse(args)
 	if err != nil {
 		if err == arg.ErrNoArgs {
 			opt.PrintHelp()
 			return
 		}
-
-		fmt.Printf("Error: %s\n", err.Error())
+		e("Error: %s", err.Error())
 		os.Exit(2)
 	}
 
 	envfile := opt.GetString("envfile")
-	count := 2
+	var env []string
 	if envfile != "" {
-		count++
 		env, err = LoadEnv(envfile)
 		if err != nil {
 			e("Error loading environment file '%s': %s", envfile, err.Error())
@@ -52,52 +47,100 @@ func main() {
 		e("Error creating watcher: %s", err.Error())
 		os.Exit(2)
 	}
-
 	defer w.Close()
+
 	program := opt.GetPosString("PROGRAM")
-	w.Add(program)
+	if err = w.Add(program); err != nil {
+		e("Error watching '%s': %s", program, err.Error())
+		os.Exit(2)
+	}
 
 	ctrlc := daemon.BreakChannel()
-	quit := make(chan bool)
+	quit := make(chan struct{})
+	restart := make(chan struct{}, 1)
+
 	pargs := opt.GetPosStringSlice("ARGS")
-	fmt.Printf("pargs: %#v\n", pargs)
-	go func() {
-		var err error
-		var cmd *exec.Cmd
+	m("Watching %s running with arguments '%s'", program, strings.Join(pargs, " "))
 
-		m("Watching %s running with arguments '%s'", program, strings.Join(pargs, " "))
-		cmd, err = runServer(program, pargs, env)
-		if err != nil {
-			e("Couldn't start process '%s': %s", program, err.Error())
-			os.Exit(2)
-		}
-		for {
-			select {
-			case ev := <-w.Events:
-				switch {
-				case ev.Op&fsnotify.Create == fsnotify.Create:
-					cmd.Process.Signal(os.Interrupt)
-					err = cmd.Wait()
-					if err != nil {
-						e("Error shutting down: %s", err.Error())
-					}
+	cmd, err := runServer(program, pargs, env)
+	if err != nil {
+		e("Couldn't start process '%s': %s", program, err.Error())
+		os.Exit(2)
+	}
 
-					cmd, err = runServer(program, pargs, env)
-					if err != nil {
-						e("Couldn't start process '%s': %s", program, err.Error())
-					}
-				}
+	go watcher(w, quit, restart, e)
 
-			case err := <-w.Errors:
-				e("Watcher error: %s", err.Error())
-			case <-ctrlc:
-				cmd.Process.Signal(os.Interrupt)
-				cmd.Wait()
-				quit <- true
-				return
+	for {
+		select {
+		case <-restart:
+			stopProcess(cmd, e)
+			cmd, err = runServer(program, pargs, env)
+			if err != nil {
+				e("Couldn't start process '%s': %s", program, err.Error())
+				continue
 			}
+			m("Restarted %s", program)
+		case <-ctrlc:
+			stopProcess(cmd, e)
+			return
+		case <-quit:
+			return
 		}
+	}
+}
+
+func watcher(w *fsnotify.Watcher, quit chan<- struct{}, restart chan<- struct{}, e func(string, ...interface{})) {
+	defer func() {
+		if r := recover(); r != nil {
+			e("Watcher panic: %v", r)
+		}
+		close(quit)
 	}()
 
-	<-quit
+	var timer *time.Timer
+	for {
+		select {
+		case ev, ok := <-w.Events:
+			if !ok {
+				return
+			}
+			if ev.Op&(fsnotify.Create|fsnotify.Write) != 0 {
+				if timer != nil {
+					timer.Stop()
+				}
+				timer = time.AfterFunc(200*time.Millisecond, func() {
+					select {
+					case restart <- struct{}{}:
+					default:
+					}
+				})
+			}
+		case err, ok := <-w.Errors:
+			if !ok {
+				return
+			}
+			e("Watcher error: %s", err.Error())
+		}
+	}
+}
+
+func stopProcess(cmd *exec.Cmd, e func(string, ...interface{})) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	cmd.Process.Signal(os.Interrupt)
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			e("Error shutting down: %s", err.Error())
+		}
+	case <-time.After(5 * time.Second):
+		e("Process did not exit gracefully, killing")
+		cmd.Process.Kill()
+		<-done
+	}
 }

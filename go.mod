@@ -5,7 +5,7 @@ go 1.25
 require (
 	github.com/Urethramancer/daemon v0.3.0
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/grimdork/climate v0.15.1
+	github.com/grimdork/climate v0.24.2
 	github.com/grimdork/loglines v1.0.2
 )
 
