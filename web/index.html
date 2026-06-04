@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>devil</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css">
+<style>
+body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+#status { background: #1a1a2e; color: #e0e0e0; padding: 10px 20px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; font-size: 14px; }
+#status .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.dot.on { background: #2ecc71; }
+.dot.off { background: #e74c3c; }
+#status strong { color: #fff; }
+#status span { opacity: 0.8; }
+#main { display: flex; height: calc(100vh - 50px); }
+#sidebar { width: 420px; min-width: 420px; overflow-y: auto; padding: 16px; background: #f8f9fa; border-right: 1px solid #ddd; }
+#logview { flex: 1; display: flex; flex-direction: column; background: #1e1e1e; }
+#logheader { padding: 8px 16px; background: #2d2d2d; color: #ccc; display: flex; align-items: center; gap: 12px; font-size: 13px; }
+#logheader label { cursor: pointer; user-select: none; }
+#logheader input { margin: 0 4px; }
+#loglines { flex: 1; overflow-y: auto; padding: 8px 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.5; color: #d4d4d4; }
+#loglines .line { white-space: pre-wrap; word-break: break-all; }
+#loglines .line.build { color: #569cd6; }
+#sidebar h3 { margin: 0 0 10px 0; font-size: 15px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+#sidebar section { margin-bottom: 20px; }
+#sidebar label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
+#sidebar input[type=text], #sidebar input[type=text] { width: 100%; box-sizing: border-box; font-size: 13px; padding: 5px 8px; }
+#sidebar button { font-size: 13px; }
+.env-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.env-table th { text-align: left; color: #555; padding: 4px 6px; border-bottom: 1px solid #ddd; }
+.env-table td { padding: 4px 6px; border-bottom: 1px solid #eee; font-family: monospace; word-break: break-all; }
+.env-table .rm { color: #e74c3c; background: none; border: none; cursor: pointer; font-size: 16px; padding: 0 6px; }
+.add-form { display: flex; gap: 6px; margin-top: 8px; }
+.add-form input { flex: 1; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.actions button { flex: 1; min-width: 90px; }
+.env-section { display: flex; gap: 20px; }
+.env-col { flex: 1; }
+.env-col h4 { font-size: 13px; margin: 0 0 6px 0; color: #333; }
+</style>
+</head>
+<body>
+<div id="status">
+  <span><span class="dot off" id="dot"></span> <strong id="st-running">-</strong></span>
+  <span>PID: <strong id="st-pid">-</strong></span>
+  <span>Uptime: <strong id="st-uptime">-</strong></span>
+  <span>Restarts: <strong id="st-restarts">0</strong></span>
+  <span>Watching: <strong id="st-watching">-</strong></span>
+  <span style="margin-left:auto;opacity:0.7" id="st-program"></span>
+</div>
+<div id="main">
+  <div id="sidebar">
+    <div class="actions">
+      <button class="pure-button" onclick="api('restart')">Restart</button>
+      <button class="pure-button" onclick="api('stop')">Stop</button>
+      <button class="pure-button" onclick="api('pause')" id="btn-pause">Pause</button>
+      <button class="pure-button" onclick="signal('hup')">SIGHUP</button>
+      <button class="pure-button" onclick="signal('usr1')">USR1</button>
+      <button class="pure-button" onclick="signal('usr2')">USR2</button>
+      <button class="pure-button" onclick="api('quit')" style="color:#e74c3c">Quit</button>
+    </div>
+
+    <section>
+      <h3>Build</h3>
+      <input type="text" id="build-cmd" placeholder="go build -o ./app ./cmd/app">
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="pure-button pure-button-primary" onclick="build()">Build &amp; Restart</button>
+        <button class="pure-button" onclick="saveBuildCmd()">Save</button>
+      </div>
+    </section>
+
+    <section>
+      <h3>Environment</h3>
+      <label>Load from file:</label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="env-file" placeholder="/path/to/.env">
+        <button class="pure-button" onclick="loadEnvFile()">Load</button>
+      </div>
+      <div style="margin-top:12px">
+        <button class="pure-button pure-button-primary" onclick="applyEnv()">Apply &amp; Restart</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="env-section">
+        <div class="env-col">
+          <h4>Current</h4>
+          <div id="env-current"></div>
+        </div>
+        <div class="env-col">
+          <h4>Pending</h4>
+          <div id="env-pending"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3>Add Variable</h3>
+      <div class="add-form">
+        <input type="text" id="add-key" placeholder="KEY">
+        <input type="text" id="add-val" placeholder="value">
+        <button class="pure-button" onclick="addEnv()">Add</button>
+      </div>
+    </section>
+  </div>
+  <div id="logview">
+    <div id="logheader">
+      <label><input type="checkbox" id="autoscroll" checked> Auto-scroll</label>
+      <input type="text" id="logfilter" placeholder="Filter..." style="flex:1;max-width:300px;font-size:13px;padding:3px 6px;background:#3a3a3a;border:1px solid #555;color:#ccc">
+    </div>
+    <div id="loglines"></div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
