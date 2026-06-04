@@ -1,9 +1,5 @@
-github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
-github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/fsnotify/fsnotify v1.10.1 h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho=
 github.com/fsnotify/fsnotify v1.10.1/go.mod h1:TLheqan6HD6GBK6PrDWyDPBaEV8LspOxvPSjC+bVfgo=
-github.com/grimdork/climate v0.24.2 h1:8yuAeV1K1YIBbegslirzz8lApwRmg04ytvwgdTY2w9g=
-github.com/grimdork/climate v0.24.2/go.mod h1:TK3a+IoyW2sab2UY/3nwl34KYewdxaxuDNXM2g3gbwY=
 github.com/grimdork/climate v0.28.0 h1:21UNV3CjPr9+X1FkHDN/ga+TkQpi8+nilMqHy+GfYPE=
 github.com/grimdork/climate v0.28.0/go.mod h1:TK3a+IoyW2sab2UY/3nwl34KYewdxaxuDNXM2g3gbwY=
 github.com/grimdork/loglines v1.0.2 h1:rEZGtlLq9S0KQUL/imsxj8NKL1xV880TowGRo98wpP0=

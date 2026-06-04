@@ -30,7 +30,7 @@ func main() {
 	args := os.Args[1:]
 	err := opt.Parse(args)
 	if err != nil {
-		if err == arg.ErrNoArgs {
+		if err == arg.ErrNoArgs || err == arg.ErrNonFatal {
 			opt.PrintHelp()
 			return
 		}
