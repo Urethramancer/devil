@@ -1,20 +1,26 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
-	"github.com/Urethramancer/daemon"
 	"github.com/fsnotify/fsnotify"
 	"github.com/grimdork/climate/arg"
 	ll "github.com/grimdork/loglines"
 )
 
+var version = "dev"
+
 func main() {
-	opt := arg.New("devil")
+	opt := arg.New("devil", "Watch a binary and restart it when recompiled.")
 	opt.SetDefaultHelp(true)
+	opt.SetOption(arg.GroupDefault, "V", "version", "Print version and exit.", "", false, arg.VarBool, nil)
 	opt.SetOption(arg.GroupDefault, "e", "envfile", "File containing environment variable key-value pairs.", "", false, arg.VarString, nil)
 	opt.SetPositional("PROGRAM", "Program to run and keep running.", "", true, arg.VarString)
 	opt.SetPositional("ARGS", "Program arguments.", "", false, arg.VarStringSlice)
@@ -30,6 +36,11 @@ func main() {
 		}
 		e("Error: %s", err.Error())
 		os.Exit(2)
+	}
+
+	if opt.GetBool("version") {
+		fmt.Printf("devil version %s\n", version)
+		return
 	}
 
 	envfile := opt.GetString("envfile")
@@ -55,7 +66,9 @@ func main() {
 		os.Exit(2)
 	}
 
-	ctrlc := daemon.BreakChannel()
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	quit := make(chan struct{})
 	restart := make(chan struct{}, 1)
 
@@ -64,8 +77,16 @@ func main() {
 
 	cmd, err := runServer(program, pargs, env)
 	if err != nil {
-		e("Couldn't start process '%s': %s", program, err.Error())
-		os.Exit(2)
+		if isNotFound(err) {
+			m("Binary '%s' not found, retrying every 10s", program)
+			cmd = waitForBinary(program, pargs, env, quit, m, e)
+			if cmd == nil {
+				return
+			}
+		} else {
+			e("Couldn't start process '%s': %s", program, err.Error())
+			os.Exit(2)
+		}
 	}
 
 	go watcher(w, quit, restart, e)
@@ -76,15 +97,50 @@ func main() {
 			stopProcess(cmd, e)
 			cmd, err = runServer(program, pargs, env)
 			if err != nil {
-				e("Couldn't start process '%s': %s", program, err.Error())
-				continue
+				if isNotFound(err) {
+					m("Binary '%s' not found, retrying every 10s", program)
+					cmd = waitForBinary(program, pargs, env, quit, m, e)
+					if cmd == nil {
+						return
+					}
+				} else {
+					e("Couldn't start process '%s': %s", program, err.Error())
+					continue
+				}
 			}
 			m("Restarted %s", program)
-		case <-ctrlc:
+		case sig := <-sigCh:
+			m("Received %s, shutting down", sig)
+			if cmd != nil && cmd.Process != nil {
+				syscall.Kill(-cmd.Process.Pid, syscall.SIGINT)
+			}
 			stopProcess(cmd, e)
 			return
 		case <-quit:
 			return
+		}
+	}
+}
+
+func isNotFound(err error) bool {
+	return errors.Is(err, exec.ErrNotFound) || os.IsNotExist(err)
+}
+
+func waitForBinary(program string, pargs, env []string, quit <-chan struct{}, m, e func(string, ...interface{})) *exec.Cmd {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			cmd, err := runServer(program, pargs, env)
+			if err == nil {
+				return cmd
+			}
+			if !isNotFound(err) {
+				e("Error starting '%s': %s", program, err.Error())
+			}
+		case <-quit:
+			return nil
 		}
 	}
 }
@@ -128,7 +184,7 @@ func stopProcess(cmd *exec.Cmd, e func(string, ...interface{})) {
 	if cmd == nil || cmd.Process == nil {
 		return
 	}
-	cmd.Process.Signal(os.Interrupt)
+	_ = cmd.Process.Signal(os.Interrupt)
 	done := make(chan error, 1)
 	go func() {
 		done <- cmd.Wait()
@@ -140,7 +196,7 @@ func stopProcess(cmd *exec.Cmd, e func(string, ...interface{})) {
 		}
 	case <-time.After(5 * time.Second):
 		e("Process did not exit gracefully, killing")
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		<-done
 	}
 }
