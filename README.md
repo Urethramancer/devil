@@ -1,34 +1,49 @@
 # devil
-App runner which restarts a process when its binary is recompiled.
+
+Process supervisor for Go development. Watches a binary file and restarts it on recompile. Ships with a web dashboard for inspection, log viewing, environment management, and build control.
 
 ## Installation
+
 ```
 go install github.com/Urethramancer/devil@latest
 ```
 
 ## Usage
-Run a server named `app` with arguments `serve` and keep watching it:
+
 ```
-devil app serve
+devil [flags] <program> [args...]
 ```
 
-Load environment variables from a file:
-```
-devil -e envfile app serve
-```
+### Flags
 
-Run the web interface on a custom port:
-```
-devil -p 9090 app serve
-```
+| Flag | Default | Description |
+|---|---|---|
+| `-e`, `--envfile` | _(none)_ | File containing `KEY=VALUE` environment variables |
+| `-p`, `--port` | `48128` | Web dashboard port |
+| `-V`, `--version` | | Print version and exit |
 
 ### Environment file format
-The env file uses `KEY=VALUE` syntax, one per line. Lines starting with `#` or `;` are comments. Blank lines are ignored. Keys are case-sensitive.
+
+`KEY=VALUE` pairs, one per line. `#` and `;` start comments. Blank lines are ignored. Keys are case-sensitive.
+
+### Web dashboard
+
+Devil starts a web server on `http://localhost:48128` (customisable with `-p`):
+
+- **Status bar** — PID, uptime, restart count, process state
+- **Log viewer** — live streaming log output with filter and auto-scroll
+- **Environment editor** — view current vars, edit pending changes side-by-side, apply & restart
+- **Build & restart** — define a build command, run it, stream output, restart on success
+- **Signal controls** — send SIGHUP, SIGUSR1, SIGUSR2 to the child process
+- **Screenshot protection** — values containing credential patterns (KEY, PASSWORD, SECRET, TOKEN, etc.) are masked by default; toggle to reveal; URL credentials are obfuscated (`postgres://***:***@localhost/db`)
+
+### Build from source
 
 ```
-# Database
-DATABASE_URL=postgres://user:pass@localhost/db
-; Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
+make build      # builds with embedded git version
+make install    # installs to $GOPATH/bin
 ```
+
+## License
+
+MIT
