@@ -273,9 +273,10 @@ func (app *App) LoadEnvFile(path string) error {
 
 // EnvEntry holds a single environment variable for the web API.
 type EnvEntry struct {
-	Key    string `json:"key"`
-	Value  string `json:"value"`
-	Masked bool   `json:"masked"`
+	Key     string `json:"key"`
+	Value   string `json:"value"`
+	Masked  bool   `json:"masked"`
+	Display string `json:"display,omitempty"`
 }
 
 var sensitivePatterns = []string{
@@ -296,6 +297,25 @@ func isSensitive(key string) bool {
 	return false
 }
 
+// obfuscateURL masks credentials in URL-like strings.
+// postgres://user:pass@localhost/db → postgres://***:***@localhost/db
+func obfuscateURL(s string) string {
+	idx := strings.Index(s, "://")
+	if idx < 0 {
+		return s
+	}
+	rest := s[idx+3:]
+	at := strings.Index(rest, "@")
+	if at < 0 {
+		return s
+	}
+	userinfo := rest[:at]
+	if !strings.Contains(userinfo, ":") {
+		return s
+	}
+	return s[:idx+3] + "***:***" + rest[at:]
+}
+
 func envEntries(vars []string) []EnvEntry {
 	entries := make([]EnvEntry, len(vars))
 	for i, e := range vars {
@@ -306,11 +326,15 @@ func envEntries(vars []string) []EnvEntry {
 		}
 		key := e[:eq]
 		val := e[eq+1:]
-		entries[i] = EnvEntry{
+		entry := EnvEntry{
 			Key:    key,
 			Value:  val,
 			Masked: isSensitive(key),
 		}
+		if disp := obfuscateURL(val); disp != val {
+			entry.Display = disp
+		}
+		entries[i] = entry
 	}
 	return entries
 }

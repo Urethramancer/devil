@@ -165,7 +165,7 @@ function renderValueCell(e, idx, editable) {
   var key = e.key;
   if (editable) {
     // Pending column
-    var display = e.masked && !(e._revealed) ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(val);
+    var display = e.masked && !(e._revealed) ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(e.display || val);
     if (e._editing) {
       return '<input type="text" id="edit-' + idx + '" value="' + escAttr(val) + '" ' +
         'onblur="commitEdit(' + idx + ', this.value)" ' +
@@ -181,7 +181,7 @@ function renderValueCell(e, idx, editable) {
   } else {
     // Current column
     var revealed = currentRevealed[key];
-    var display = e.masked && !revealed ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(val);
+    var display = e.masked && !revealed ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(e.display || val);
     var cls = e.masked ? ' masked' : '';
     return '<span class="env-val' + cls + '" onclick="toggleCurrentReveal(\'' + escAttrKey(key) + '\')">' + display + '</span>';
   }
