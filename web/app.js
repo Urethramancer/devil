@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
   pollStatus();
   setInterval(pollStatus, 2000);
   fetchEnv();
+  initDivider();
 
   document.getElementById('autoscroll').addEventListener('change', function() {
     autoscroll = this.checked;
@@ -170,9 +171,13 @@ function renderValueCell(e, idx, editable) {
         'onblur="commitEdit(' + idx + ', this.value)" ' +
         'onkeydown="if(event.key===\'Enter\')commitEdit(' + idx + ', this.value)" autofocus>';
     }
-    var toggle = e.masked ? ' onclick="toggleReveal(' + idx + ')"' : '';
-    var editClick = ' onclick="startEdit(' + idx + ')"';
-    return '<span class="env-val"' + (e.masked ? toggle : editClick) + '>' + display + '</span>';
+    var clickAction;
+    if (e.masked && !e._revealed) {
+      clickAction = 'toggleReveal(' + idx + ')';
+    } else {
+      clickAction = 'startEdit(' + idx + ')';
+    }
+    return '<span class="env-val" onclick="' + clickAction + '">' + display + '</span>';
   } else {
     // Current column
     var revealed = currentRevealed[key];
@@ -228,7 +233,7 @@ function commitEdit(idx, newValue) {
   if (!pendingEnv[idx]) return;
   pendingEnv[idx].value = newValue;
   pendingEnv[idx]._editing = false;
-  // Recompute masked flag (value might no longer be sensitive if key changed)
+  delete pendingEnv[idx]._revealed;
   renderEnvList('env-pending', pendingEnv, true);
 }
 
@@ -348,4 +353,39 @@ function esc(s) {
 
 function escAttr(s) {
   return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+// --- Draggable divider ---
+
+function initDivider() {
+  var divider = document.getElementById('divider');
+  var sidebar = document.getElementById('sidebar');
+  var main = document.getElementById('main');
+  var isDragging = false;
+
+  // Restore saved width
+  var saved = localStorage.getItem('devil-sidebar-width');
+  if (saved) {
+    sidebar.style.width = Math.max(200, Math.min(window.innerWidth * 0.7, parseInt(saved, 10))) + 'px';
+  }
+
+  divider.addEventListener('mousedown', function(e) {
+    isDragging = true;
+    main.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    var w = Math.max(200, Math.min(window.innerWidth * 0.7, e.clientX - main.getBoundingClientRect().left));
+    sidebar.style.width = w + 'px';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!isDragging) return;
+    isDragging = false;
+    main.classList.remove('dragging');
+    var w = parseInt(sidebar.style.width, 10);
+    localStorage.setItem('devil-sidebar-width', w);
+  });
 }
