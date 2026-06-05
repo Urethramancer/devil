@@ -15,6 +15,7 @@ func main() {
 	opt := arg.New("devil", "Watch a binary and restart it when recompiled.")
 	opt.SetDefaultHelp(true)
 	opt.SetOption(arg.GroupDefault, "V", "version", "Print version and exit.", false, false, arg.VarBool, nil)
+	opt.SetOption(arg.GroupDefault, "p", "port", "Web server port.", "48128", false, arg.VarString, nil)
 	opt.SetOption(arg.GroupDefault, "e", "envfile", "File containing environment variable key-value pairs.", "", false, arg.VarString, nil)
 	opt.SetPositional("PROGRAM", "Program to run and keep running.", "", true, arg.VarString)
 	opt.SetPositional("ARGS", "Program arguments.", "", false, arg.VarStringSlice)
@@ -49,6 +50,7 @@ func main() {
 
 	program := opt.GetPosString("PROGRAM")
 	pargs := opt.GetPosStringSlice("ARGS")
+	port := opt.GetString("port")
 
 	logBuf := NewLogBuffer(5000)
 
@@ -58,7 +60,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	go serve(app, ":48128")
+	go serve(app, ":"+port)
 
 	m("Watching %s running with arguments '%s'", program, strings.Join(pargs, " "))
 

@@ -17,6 +17,11 @@ Load environment variables from a file:
 devil -e envfile app serve
 ```
 
+Run the web interface on a custom port:
+```
+devil -p 9090 app serve
+```
+
 ### Environment file format
 The env file uses `KEY=VALUE` syntax, one per line. Lines starting with `#` or `;` are comments. Blank lines are ignored. Keys are case-sensitive.
 
