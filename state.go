@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -268,6 +269,64 @@ func (app *App) LoadEnvFile(path string) error {
 	}
 	app.SetPendingEnv(vars)
 	return nil
+}
+
+// EnvEntry holds a single environment variable for the web API.
+type EnvEntry struct {
+	Key    string `json:"key"`
+	Value  string `json:"value"`
+	Masked bool   `json:"masked"`
+}
+
+var sensitivePatterns = []string{
+	"KEY", "PASSWORD", "PASSWD", "SECRET", "TOKEN",
+	"AWS_ACCESS", "AWS_SECRET", "CREDENTIAL", "PRIVATE",
+	"AUTH", "SIGNING", "CERT", "CERTIFICATE",
+	"API_KEY", "ACCESS_KEY", "ENCRYPT",
+}
+
+// isSensitive returns true if the key name matches common credential patterns.
+func isSensitive(key string) bool {
+	upper := strings.ToUpper(key)
+	for _, p := range sensitivePatterns {
+		if strings.Contains(upper, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func envEntries(vars []string) []EnvEntry {
+	entries := make([]EnvEntry, len(vars))
+	for i, e := range vars {
+		eq := strings.IndexByte(e, '=')
+		if eq < 0 {
+			entries[i] = EnvEntry{Key: e, Value: "", Masked: false}
+			continue
+		}
+		key := e[:eq]
+		val := e[eq+1:]
+		entries[i] = EnvEntry{
+			Key:    key,
+			Value:  val,
+			Masked: isSensitive(key),
+		}
+	}
+	return entries
+}
+
+// EnvEntries returns the applied environment as structured entries.
+func (app *App) EnvEntries() []EnvEntry {
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	return envEntries(app.env)
+}
+
+// PendingEnvEntries returns the pending environment as structured entries.
+func (app *App) PendingEnvEntries() []EnvEntry {
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	return envEntries(app.pendingEnv)
 }
 
 // Build runs the configured build command, streams output to the log,

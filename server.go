@@ -67,10 +67,27 @@ func handleStatus(app *App) http.HandlerFunc {
 
 func handleEnv(app *App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]interface{}{
-			"current": app.Env(),
-			"pending": app.PendingEnv(),
-		})
+		switch r.Method {
+		case http.MethodGet:
+			writeJSON(w, map[string]interface{}{
+				"current": app.EnvEntries(),
+				"pending": app.PendingEnvEntries(),
+			})
+		case http.MethodPut:
+			var req struct {
+				Vars []string `json:"vars"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			app.SetPendingEnv(req.Vars)
+			writeJSON(w, map[string]interface{}{
+				"pending": app.PendingEnvEntries(),
+			})
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 	}
 }
 
@@ -91,7 +108,10 @@ func handleEnvLoad(app *App) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		handleEnv(app)(w, r)
+		writeJSON(w, map[string]interface{}{
+			"current": app.EnvEntries(),
+			"pending": app.PendingEnvEntries(),
+		})
 	}
 }
 
@@ -115,7 +135,7 @@ func handleEnvAdd(app *App) http.HandlerFunc {
 		}
 		app.AddPendingEnv(req.Key, req.Value)
 		writeJSON(w, map[string]interface{}{
-			"pending": app.PendingEnv(),
+			"pending": app.PendingEnvEntries(),
 		})
 	}
 }
@@ -133,7 +153,7 @@ func handleEnvRemove(app *App) http.HandlerFunc {
 		}
 		app.RemovePendingEnv(key)
 		writeJSON(w, map[string]interface{}{
-			"pending": app.PendingEnv(),
+			"pending": app.PendingEnvEntries(),
 		})
 	}
 }

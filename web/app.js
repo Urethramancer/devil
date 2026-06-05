@@ -1,12 +1,15 @@
 var autoscroll = true;
 var hasScrolled = false;
+var reconnecting = false;
+var pendingEnv = [];
+var currentRevealed = {};
 
 document.addEventListener('DOMContentLoaded', function() {
   connectSSE();
   loadBuildCmd();
   pollStatus();
   setInterval(pollStatus, 2000);
-  setInterval(fetchEnv, 3000);
+  fetchEnv();
 
   document.getElementById('autoscroll').addEventListener('change', function() {
     autoscroll = this.checked;
@@ -32,8 +35,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (atBottom) hasScrolled = false;
   });
 });
-
-var reconnecting = false;
 
 function connectSSE() {
   reconnecting = false;
@@ -90,8 +91,7 @@ function pollStatus() {
   fetch('/api/status')
     .then(function(r) { return r.json(); })
     .then(function(s) {
-      var dot = document.getElementById('dot');
-      dot.className = 'dot ' + (s.running ? 'on' : 'off');
+      document.getElementById('dot').className = 'dot ' + (s.running ? 'on' : 'off');
       document.getElementById('st-running').textContent = s.running ? 'Running' : 'Stopped';
       document.getElementById('st-pid').textContent = s.pid || '-';
       document.getElementById('st-uptime').textContent = s.uptime || '-';
@@ -104,30 +104,54 @@ function pollStatus() {
     .catch(function() {});
 }
 
+// --- Environment ---
+
+var sensitivePatterns = ['KEY', 'PASSWORD', 'PASSWD', 'SECRET', 'TOKEN',
+  'AWS_ACCESS', 'AWS_SECRET', 'CREDENTIAL', 'PRIVATE',
+  'AUTH', 'SIGNING', 'CERT', 'CERTIFICATE',
+  'API_KEY', 'ACCESS_KEY', 'ENCRYPT'];
+
+function isSensitive(key) {
+  var upper = key.toUpperCase();
+  for (var i = 0; i < sensitivePatterns.length; i++) {
+    if (upper.indexOf(sensitivePatterns[i]) !== -1) return true;
+  }
+  return false;
+}
+
 function fetchEnv() {
   fetch('/api/env')
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      renderEnvList('env-current', data.current || []);
+      pendingEnv = (data.pending || []).map(function(e) {
+        return {key: e.key, value: e.value, masked: e.masked};
+      });
+      renderEnvList('env-current', data.current || [], false);
       renderEnvList('env-pending', data.pending || [], true);
+      updatePendingCount();
     })
     .catch(function() {});
 }
 
-function renderEnvList(id, vars, editable) {
+function updatePendingCount() {
+  var countEl = document.getElementById('pending-count');
+  if (countEl) countEl.textContent = pendingEnv.length + ' var(s)';
+}
+
+function renderEnvList(id, entries, editable) {
   var el = document.getElementById(id);
-  if (vars.length === 0) {
+  if (!entries || entries.length === 0) {
     el.innerHTML = '<div style="color:#999;font-size:12px">(empty)</div>';
     return;
   }
   var html = '<table class="env-table">';
-  for (var i = 0; i < vars.length; i++) {
-    var eq = vars[i].indexOf('=');
-    var key = vars[i].substring(0, eq);
-    var val = vars[i].substring(eq + 1);
-    html += '<tr><td style="max-width:120px">' + esc(key) + '</td><td style="max-width:140px">' + esc(val) + '</td>';
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    html += '<tr data-key="' + escAttr(e.key) + '" data-idx="' + i + '">';
+    html += '<td style="max-width:120px">' + esc(e.key) + '</td>';
+    html += '<td style="max-width:140px">' + renderValueCell(e, i, editable) + '</td>';
     if (editable) {
-      html += '<td><button class="rm" onclick="removeEnv(\'' + escAttr(key) + '\')">&times;</button></td>';
+      html += '<td><button class="rm" onclick="removeEnv(' + i + ')">&times;</button></td>';
     }
     html += '</tr>';
   }
@@ -135,13 +159,140 @@ function renderEnvList(id, vars, editable) {
   el.innerHTML = html;
 }
 
-function esc(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function renderValueCell(e, idx, editable) {
+  var val = e.value;
+  var key = e.key;
+  if (editable) {
+    // Pending column
+    var display = e.masked && !(e._revealed) ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(val);
+    if (e._editing) {
+      return '<input type="text" id="edit-' + idx + '" value="' + escAttr(val) + '" ' +
+        'onblur="commitEdit(' + idx + ', this.value)" ' +
+        'onkeydown="if(event.key===\'Enter\')commitEdit(' + idx + ', this.value)" autofocus>';
+    }
+    var toggle = e.masked ? ' onclick="toggleReveal(' + idx + ')"' : '';
+    var editClick = ' onclick="startEdit(' + idx + ')"';
+    return '<span class="env-val"' + (e.masked ? toggle : editClick) + '>' + display + '</span>';
+  } else {
+    // Current column
+    var revealed = currentRevealed[key];
+    var display = e.masked && !revealed ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(val);
+    var cls = e.masked ? ' masked' : '';
+    return '<span class="env-val' + cls + '" onclick="toggleCurrentReveal(\'' + escAttrKey(key) + '\')">' + display + '</span>';
+  }
 }
 
-function escAttr(s) {
-  return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+function escAttrKey(s) {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
+
+function toggleCurrentReveal(key) {
+  if (currentRevealed[key]) {
+    delete currentRevealed[key];
+  } else {
+    currentRevealed[key] = true;
+  }
+  fetchEnvCurrentOnly();
+}
+
+function fetchEnvCurrentOnly() {
+  fetch('/api/env')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      renderEnvList('env-current', data.current || [], false);
+    })
+    .catch(function() {});
+}
+
+function toggleReveal(idx) {
+  pendingEnv[idx]._revealed = !pendingEnv[idx]._revealed;
+  renderEnvList('env-pending', pendingEnv, true);
+}
+
+function startEdit(idx) {
+  if (pendingEnv[idx].masked) {
+    pendingEnv[idx]._revealed = true;
+  }
+  pendingEnv[idx]._editing = true;
+  renderEnvList('env-pending', pendingEnv, true);
+  setTimeout(function() {
+    var input = document.getElementById('edit-' + idx);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 50);
+}
+
+function commitEdit(idx, newValue) {
+  if (!pendingEnv[idx]) return;
+  pendingEnv[idx].value = newValue;
+  pendingEnv[idx]._editing = false;
+  // Recompute masked flag (value might no longer be sensitive if key changed)
+  renderEnvList('env-pending', pendingEnv, true);
+}
+
+function removeEnv(idx) {
+  pendingEnv.splice(idx, 1);
+  renderEnvList('env-pending', pendingEnv, true);
+  updatePendingCount();
+}
+
+function addEnv() {
+  var key = document.getElementById('add-key').value.trim();
+  var val = document.getElementById('add-val').value.trim();
+  if (!key) return;
+  pendingEnv.push({
+    key: key,
+    value: val,
+    masked: isSensitive(key)
+  });
+  document.getElementById('add-key').value = '';
+  document.getElementById('add-val').value = '';
+  renderEnvList('env-pending', pendingEnv, true);
+  updatePendingCount();
+}
+
+function loadEnvFile() {
+  var path = document.getElementById('env-file').value.trim();
+  if (!path) return;
+  fetch('/api/env/load', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: path })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      pendingEnv = (data.pending || []).map(function(e) {
+        return {key: e.key, value: e.value, masked: e.masked};
+      });
+      renderEnvList('env-pending', pendingEnv, true);
+      renderEnvList('env-current', data.current || [], false);
+      updatePendingCount();
+    })
+    .catch(function() {});
+}
+
+function applyEnv() {
+  var vars = pendingEnv.map(function(e) { return e.key + '=' + e.value; });
+  fetch('/api/env', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vars: vars })
+  })
+    .then(function() {
+      fetch('/api/env/apply', { method: 'POST' })
+        .then(function() {
+          pollStatus();
+          // Re-fetch env after restart
+          setTimeout(fetchEnv, 500);
+        })
+        .catch(function() {});
+    })
+    .catch(function() {});
+}
+
+// --- Actions ---
 
 function api(action) {
   fetch('/api/' + action, { method: 'POST' })
@@ -164,46 +315,7 @@ function build() {
   }).catch(function() {});
 }
 
-function addEnv() {
-  var key = document.getElementById('add-key').value.trim();
-  var val = document.getElementById('add-val').value.trim();
-  if (!key) return;
-  fetch('/api/env/add', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key: key, value: val })
-  })
-    .then(function() {
-      document.getElementById('add-key').value = '';
-      document.getElementById('add-val').value = '';
-      fetchEnv();
-    })
-    .catch(function() {});
-}
-
-function removeEnv(key) {
-  fetch('/api/env/remove/' + encodeURIComponent(key), { method: 'DELETE' })
-    .then(function() { fetchEnv(); })
-    .catch(function() {});
-}
-
-function loadEnvFile() {
-  var path = document.getElementById('env-file').value.trim();
-  if (!path) return;
-  fetch('/api/env/load', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: path })
-  })
-    .then(function() { fetchEnv(); })
-    .catch(function() {});
-}
-
-function applyEnv() {
-  fetch('/api/env/apply', { method: 'POST' })
-    .then(function() { pollStatus(); })
-    .catch(function() {});
-}
+// --- Cookie helpers ---
 
 function loadBuildCmd() {
   var cmd = getCookie('devil-buildcmd');
@@ -226,4 +338,14 @@ function setCookie(name, value, days) {
   var d = new Date();
   d.setTime(d.getTime() + days * 86400000);
   document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+}
+
+// --- Utilities ---
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escAttr(s) {
+  return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }

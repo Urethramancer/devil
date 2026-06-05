@@ -39,6 +39,9 @@ body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'S
 .env-section { display: flex; gap: 20px; }
 .env-col { flex: 1; }
 .env-col h4 { font-size: 13px; margin: 0 0 6px 0; color: #333; }
+.env-val { cursor: pointer; border-bottom: 1px dotted #ccc; }
+.env-val:hover { background: #f0f0f0; }
+.env-val.masked { color: #999; font-style: italic; }
 </style>
 </head>
 <body>
@@ -78,7 +81,7 @@ body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'S
         <input type="text" id="env-file" placeholder="/path/to/.env">
         <button class="pure-button" onclick="loadEnvFile()">Load</button>
       </div>
-      <div style="margin-top:12px">
+		  <div style="margin-top:12px">
         <button class="pure-button pure-button-primary" onclick="applyEnv()">Apply &amp; Restart</button>
       </div>
     </section>
@@ -90,7 +93,7 @@ body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'S
           <div id="env-current"></div>
         </div>
         <div class="env-col">
-          <h4>Pending</h4>
+          <h4>Pending <span id="pending-count" style="font-weight:normal;font-size:12px;color:#888"></span></h4>
           <div id="env-pending"></div>
         </div>
       </div>
