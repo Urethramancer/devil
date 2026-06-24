@@ -44,11 +44,16 @@ type App struct {
 
 // NewApp creates a new App and attaches the filesystem watcher to the given binary.
 func NewApp(program string, pargs, env []string, logBuf *LogBuffer) (*App, error) {
+	path, err := filepath.Abs(program)
+	if err != nil {
+		return nil, err
+	}
+
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
-	if err = w.Add(program); err != nil {
+	if err = w.Add(path); err != nil {
 		w.Close()
 		return nil, err
 	}
@@ -63,7 +68,7 @@ func NewApp(program string, pargs, env []string, logBuf *LogBuffer) (*App, error
 	copy(pargsCopy, pargs)
 
 	app := &App{
-		program:      program,
+		program:      path,
 		pargs:        pargsCopy,
 		env:          envCopy,
 		pendingEnv:   pending,
@@ -97,12 +102,8 @@ func (app *App) Start() error {
 	cmd.Stdout = app.stdoutWriter
 	cmd.Stderr = app.stderrWriter
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	path, err := filepath.Abs(app.program)
-	if err != nil {
-		ll.Err("Error resolving absolute path for '%s': %s", app.program, err.Error())
-	}
-	cmd.Dir = filepath.Dir(path)
-	if err = cmd.Start(); err != nil {
+	cmd.Dir = filepath.Dir(app.program)
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 
